@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from .pattern import Pattern
+from .presets import list_presets, load_preset
 from .randomize import STYLES, randomize
 from .render import render
 
@@ -12,18 +13,20 @@ def build_parser() -> argparse.ArgumentParser:
                                 description="Programmatic drum loop generator.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    g = sub.add_parser("generate", help="Randomize and render a loop")
-    g.add_argument("-b", "--bpm", type=int, default=100)
-    g.add_argument("--bars", type=int, default=4)
-    g.add_argument("--style", choices=list(STYLES), default="boom-bap")
+    g = sub.add_parser("generate", help="Render a loop from a preset or the randomizer")
+    g.add_argument("-b", "--bpm", type=int, default=None)
+    g.add_argument("--bars", type=int, default=None)
+    g.add_argument("--style", choices=list(STYLES), default=None)
+    g.add_argument("-p", "--preset", default=None)
     g.add_argument("--seed", type=int, default=None)
     g.add_argument("-o", "--output", default="output/loop.wav")
-    g.add_argument("--save-pattern", default=None,
-                   help="Also write the Pattern as JSON")
+    g.add_argument("--save-pattern", default=None)
 
     r = sub.add_parser("render", help="Render an existing Pattern JSON file")
     r.add_argument("pattern")
     r.add_argument("-o", "--output", default="output/loop.wav")
+
+    sub.add_parser("presets", help="List shipped presets")
 
     return p
 
@@ -31,9 +34,31 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
 
+    if args.cmd == "presets":
+        for name, data in sorted(list_presets().items()):
+            kind = ("pattern" if "hits" in data
+                    else f"generative ({data.get('style', '?')})")
+            print(f"{name:24s} {kind:22s} bpm={data.get('bpm', '?')}")
+        return 0
+
     if args.cmd == "generate":
-        pat = randomize(bpm=args.bpm, bars=args.bars,
-                        style=args.style, seed=args.seed)
+        if args.preset and args.style:
+            print("error: --preset and --style are mutually exclusive")
+            return 2
+        if args.preset:
+            try:
+                pat = load_preset(args.preset, bpm=args.bpm,
+                                  bars=args.bars, seed=args.seed)
+            except ValueError as e:
+                print(f"error: {e}")
+                return 2
+        else:
+            pat = randomize(
+                bpm=args.bpm if args.bpm is not None else 100,
+                bars=args.bars if args.bars is not None else 4,
+                style=args.style or "boom-bap",
+                seed=args.seed,
+            )
         if args.save_pattern:
             Path(args.save_pattern).write_text(json.dumps(pat.to_dict(), indent=2))
     else:
