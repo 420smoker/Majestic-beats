@@ -2,6 +2,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .ai import pattern_from_prompt
 from .pattern import Pattern
 from .presets import list_presets, load_preset
 from .randomize import STYLES, randomize
@@ -13,11 +14,14 @@ def build_parser() -> argparse.ArgumentParser:
                                 description="Programmatic drum loop generator.")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    g = sub.add_parser("generate", help="Render a loop from a preset or the randomizer")
+    g = sub.add_parser("generate", help="Render a loop")
     g.add_argument("-b", "--bpm", type=int, default=None)
     g.add_argument("--bars", type=int, default=None)
     g.add_argument("--style", choices=list(STYLES), default=None)
     g.add_argument("-p", "--preset", default=None)
+    g.add_argument("--prompt", default=None,
+                   help="Natural-language prompt (needs ANTHROPIC_API_KEY "
+                        "or OPENAI_API_KEY)")
     g.add_argument("--seed", type=int, default=None)
     g.add_argument("-o", "--output", default="output/loop.wav")
     g.add_argument("--save-pattern", default=None)
@@ -42,10 +46,24 @@ def main(argv=None) -> int:
         return 0
 
     if args.cmd == "generate":
-        if args.preset and args.style:
-            print("error: --preset and --style are mutually exclusive")
-            return 2
-        if args.preset:
+        if args.prompt:
+            if args.preset or args.style:
+                print("error: --prompt cannot be combined with --preset or --style")
+                return 2
+            if args.bars is not None:
+                print("error: the AI sets bars; --bars cannot be used with --prompt")
+                return 2
+            try:
+                pat = pattern_from_prompt(args.prompt, seed=args.seed)
+            except RuntimeError as e:
+                print(f"error: {e}")
+                return 2
+            if args.bpm is not None:
+                pat.bpm = args.bpm
+        elif args.preset:
+            if args.style:
+                print("error: --preset and --style are mutually exclusive")
+                return 2
             try:
                 pat = load_preset(args.preset, bpm=args.bpm,
                                   bars=args.bars, seed=args.seed)
