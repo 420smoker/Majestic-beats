@@ -9,7 +9,7 @@ def test_play_uses_first_backend(monkeypatch):
                         lambda: ("termux-media-player",
                                  ["termux-media-player", "play"]))
     monkeypatch.setattr(playback.subprocess, "run",
-                        lambda cmd, check: seen.append(cmd))
+                        lambda cmd, check, **kw: seen.append(cmd))
     name = playback.play("x.wav")
     assert name == "termux-media-player"
     assert seen and seen[0][0] == "termux-media-player"
