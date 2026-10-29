@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message="Couldn't find ffmpeg")
+
 from .pattern import Pattern
 from .randomize import randomize
 from .render import render
